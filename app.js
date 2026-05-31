@@ -1,4 +1,4 @@
-const WORKER_URL = "https://ai-gemini.wojciech-stepien.workers.dev/"; // Podmień na prawidłowy adres z Cloudflare Workers
+const WORKER_URL = "https://ai-gemini.wojciech-stepien.workers.dev/"; // adres Cloudflare Workers
 const SMT_STATIONS = ['SPI', 'PnP', 'Reflow_Oven', 'AOI_Pre', 'AOI_Post', 'Transport'];
 
 let rawData = [];
@@ -16,35 +16,30 @@ const colors = {
 
 document.addEventListener("DOMContentLoaded", async () => {
     initCharts();
-    
-    // 1. Zbuduj listę plików odpytując index.json (
     await fetchLogList(); 
-    
-    // 2. Podepnij nasłuchiwacze eventów dla selektora
     setupFileHandling();
-    
-    // 3. Wystartuj symulację
     startTimer();
     
     const dzisiaj = new Date().toLocaleDateString('pl-PL', { day: 'numeric', month: 'long', year: 'numeric' });
     document.getElementById('dateDisplay').innerText = dzisiaj;
     document.querySelectorAll('.dynamicDate').forEach(el => el.innerText = dzisiaj);
 
-    // Initial ping
     pingServices();
-    
-    // Bezpieczny Ping - weryfikuje czy karta jest aktywna
     pingIntervalId = setInterval(pingServices, 30000); 
     
-    // Page Visibility API - Dodatkowe zabezpieczenie usypiające skrypt na ukrytej karcie
     document.addEventListener("visibilitychange", () => {
         if (document.visibilityState === "visible") {
-            pingServices(); // Sprawdź od razu po powrocie do karty
+            pingServices(); 
         }
     });
 });
 
-// Wczytywanie z index.json 
+//  ładowanie Modali Bootstrapa
+function openModal(id) {
+    const modal = bootstrap.Modal.getOrCreateInstance(document.getElementById(id));
+    modal.show();
+}
+
 async function fetchLogList() {
     try {
         const response = await fetch('logs/index.json');
@@ -53,24 +48,22 @@ async function fetchLogList() {
         const files = await response.json();
         const selector = document.getElementById('logSelector');
         
-        // Czyścimy defaultowego html-owego selecta
         selector.innerHTML = '';
         
-        files.forEach((file, idx) => {
+        files.forEach((file) => {
             const opt = document.createElement('option');
             opt.value = `logs/${file}`;
             opt.textContent = `SMT Line (${file})`;
             selector.appendChild(opt);
         });
         
-        // Zawsze zostawiamy opcję "Offline lokalnie" na dole
         const optLocal = document.createElement('option');
         optLocal.value = "local";
         optLocal.textContent = "📁 Wczytaj lokalnie z dysku...";
         selector.appendChild(optLocal);
 
     } catch (err) {
-        console.warn("Brak pliku logs/index.json. Korzystam z domyślnej listy w HTML.");
+        console.warn("Brak pliku logs/index.json. Korzystam z domyślnej listy.");
     }
 }
 
@@ -89,7 +82,6 @@ function setupFileHandling() {
     const selector = document.getElementById('logSelector');
     const fileInput = document.getElementById('localFileInput');
 
-    // Załaduj plik domyślnie ustawiony z listy
     loadLogViaFetch(selector.value);
 
     selector.addEventListener('change', (e) => {
@@ -118,7 +110,7 @@ async function loadLogViaFetch(filePath) {
         const csvText = await res.text();
         loadLogViaPapaParse(csvText);
     } catch (err) {
-        console.warn("Nie mogłem wczytać logu zdalnego. Działasz w trybie Offline.");
+        console.warn("Tryb Offline.");
     }
 }
 
@@ -161,7 +153,6 @@ function simulateDataStream() {
     processCumulativeMetrics(visibleData);
 }
 
-// LOGIKA MATEMATYCZNA - FPY i OEE
 function processChunkForBalance(chunk) {
     const timeLabel = chunk[0]?.Timestamp ? chunk[0].Timestamp.substring(11, 16) : new Date().toLocaleTimeString().substring(0,5);
     
@@ -255,7 +246,7 @@ function initCharts() {
             datasets: [{
                 data: [0,0,0,0],
                 backgroundColor: [colors.spi, colors.reflow, colors.aoi, colors.transport],
-                borderWidth: 2, borderColor: '#2d2d2d'
+                borderWidth: 2, borderColor: '#171717'
             }]
         },
         options: {
@@ -306,15 +297,8 @@ function updateTable(problemsMap) {
     });
 }
 
-// ==========================================
-// FUNKCJE SIECIOWE (Ping + Raport AI)
-// ==========================================
-
 async function pingServices() {
-    // KLUCZOWE ZABEZPIECZENIE: Zatrzymuje żądania do API jeśli użytkownik zminimalizował okno
-    if (document.visibilityState !== 'visible') {
-        return; 
-    }
+    if (document.visibilityState !== 'visible') return;
 
     const cfIcon = document.getElementById('cfStatusIcon');
     const gemIcon = document.getElementById('geminiStatusIcon');
@@ -343,11 +327,15 @@ async function pingServices() {
     }
 }
 
+// WYWOŁANIE MODALA AI 
 function openAiModal() {
     const dzisiaj = new Date().toLocaleDateString('pl-PL');
     document.getElementById('aiEmailSubject').value = `[${dzisiaj}] Raport Inżynieryjny (Quality AI)`;
     
-    new bootstrap.Modal(document.getElementById('aiReportModal')).show();
+    // Bezpieczne otwarcie
+    openModal('aiReportModal');
+    
+    // Rozpocznij analizę (trigger) po otwarciu
     triggerAIReport();
 }
 
@@ -397,5 +385,7 @@ function sendAIReport() {
     }
 
     alert(`Sukces! Raport wylądował w skrzynce.\n\nTemat: ${subject}\nAdresaci: ${to}`);
-    bootstrap.Modal.getInstance(document.getElementById('aiReportModal')).hide();
+    
+    // Bezpieczne zamknięcie okna
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('aiReportModal')).hide();
 }
