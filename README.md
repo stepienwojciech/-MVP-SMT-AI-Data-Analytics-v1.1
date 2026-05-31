@@ -14,7 +14,7 @@ Dzięki bezpośredniemu przetwarzaniu tysięcy rekordów w przeglądarce i bezpi
 
 **Kluczowe Funkcjonalności**
 
-* **Live View (Polling 29s):** Automatyczne wczytywanie i odświeżanie logów z lokalnego potoku produkcyjnego, odzwierciedlające fizyczny przepływ płytki PCBA (SPI, PnP, Reflow\_Oven, AOI).  
+* **Live View (Polling 10s):** Automatyczne wczytywanie i odświeżanie logów z lokalnego potoku produkcyjnego, odzwierciedlające fizyczny przepływ płytki PCBA (SPI, PnP, Reflow\_Oven, AOI).  
 * **Client-Side Processing:** Pobieranie plików \`.csv\`, ich parsowanie i rozbudowana agregacja matematyczna odbywają się bezpośrednio w przeglądarce użytkownika, całkowicie odciążając serwer.  
 * **Edge AI Integration (Raportowanie):** Generowanie inżynieryjnych wniosków "na żądanie" z użyciem wdrożonego systemu RAG. Model AI podsumowuje anomalie i sugeruje akcje korygujące.  
 * **Zero-Trust Security:** Całkowita separacja kluczy API. Logika integracyjna z modelem AI została przeniesiona do architektury bez serwerowej (Cloudflare Workers).
