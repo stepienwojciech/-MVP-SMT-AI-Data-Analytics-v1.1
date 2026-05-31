@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Symulator Danych Produkcyjnych 2026</title>
+    <!-- Klasyka: Bootstrap do szybkiego i schludnego UI -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { background-color: #f8f9fa; padding-top: 20px; }
+        .card { box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .table-responsive { max-height: 500px; overflow-y: auto; }
+        thead { position: sticky; top: 0; background-color: #fff; z-index: 1; }
+        .pass { color: #198754; font-weight: bold; }
+        .fail { color: #dc3545; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+<div class="container-fluid px-4">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h2 class="mb-3">⚙️ Generator Danych Produkcyjnych SMT</h2>
+            <p class="text-muted">Prosty, wydajny symulator. Zasada Pareto: minimum kodu, maksimum użyteczności.</p>
+        </div>
+    </div>
+
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <div class="card p-3">
+                <label for="valueStream" class="form-label">Wybierz Value Stream:</label>
+                <select id="valueStream" class="form-select mb-3">
+                    <option value="VS1">VS1</option>
+                    <option value="VS2">VS2</option>
+                    <option value="VS3">VS3</option>
+                    <option value="VS4">VS4</option>
+                </select>
+
+                <label for="recordCount" class="form-label">Liczba rekordów do wygenerowania:</label>
+                <input type="number" id="recordCount" class="form-control mb-4" min="500" max="10000" step="100" value="1000">
+                
+                <div class="d-flex gap-2">
+                    <button class="btn btn-primary w-50" onclick="generateData()">Generuj Dane</button>
+                    <button class="btn btn-success w-50" id="downloadBtn" onclick="downloadCSV()" disabled>Pobierz CSV</button>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-8">
+            <div class="card p-3 h-100 justify-content-center">
+                <h5 id="statusText" class="text-center text-secondary m-0">Oczekuję na wygenerowanie danych...</h5>
+            </div>
+        </div>
+    </div>
+
+    <div class="card p-0">
+        <div class="table-responsive">
+            <table class="table table-sm table-hover table-bordered m-0" id="dataTable" style="display: none;">
+                <thead class="table-dark">
+                    <tr>
+                        <th>Timestamp</th>
+                        <th>Value_Stream</th>
+                        <th>Batch_ID</th>
+                        <th>Product_SN</th>
+                        <th>Station_ID</th>
+                        <th>Tester_Type</th>
+                        <th>Status</th>
+                        <th>Error_Code</th>
+                        <th>Measured_Value</th>
+                        <th>Cost_Impact</th>
+                        <th>Shift</th>
+                        <th>Team</th>
+                    </tr>
+                </thead>
+                <tbody id="tableBody"></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Klasyka produkcyjna: tablice konfiguracyjne zamiast hardkodowania 
+    const STATIONS = [
+        { id: 'SPI', errors: ['ERR_EXCESS_PASTE', 'ERR_INSUFF_PASTE'], val: pass => pass ? `${randomInt(90, 110)}%` : `${randomInt(130, 160)}%` },
+        { id: 'PnP', errors: ['ERR_MISSING_COMP', 'ERR_MISALIGNMENT'], val: pass => pass ? `0.0${randomInt(1, 5)}mm` : `0.${randomInt(15, 60)}mm` },
+        { id: 'AOI_Pre', errors: ['ERR_TOMBSTONE', 'ERR_MISSING_COMP'], val: () => 'NA' },
+        { id: 'Transport', errors: ['ERR_SENSOR_TIMEOUT', 'ERR_BOARD_JAM'], val: () => 'NA' },
+        { id: 'Reflow_Oven', errors: ['ERR_TEMP_OOR'], val: pass => pass ? `${(Math.random() * 3 - 1.5).toFixed(1)} C` : `${(Math.random() * 5 + 3).toFixed(1)} C` },
+        { id: 'AOI_Post', errors: ['ERR_SOLDER_BALL', 'ERR_BRIDGING', 'ERR_TOMBSTONE'], val: () => 'NA' }
+    ];
+
+    let generatedRecords = [];
+    let currentUsedVS = 'VS1'; // Pamięta VS użyty podczas ostatniego generowania
+
+    function randomInt(min, max) {
+        return Math.floor(Math.random() * (max - min + 1) + min);
+    }
+
+    function formatTime(date) {
+        return date.toISOString().replace('T', ' ').substring(0, 19);
+    }
+
+    function generateData() {
+        const targetCount = parseInt(document.getElementById('recordCount').value);
+        if (targetCount < 500 || targetCount > 10000) {
+            alert('Wybierz wartość między 500 a 10000');
+            return;
+        }
+
+        // Pobieramy aktualnie wybrany VS
+        currentUsedVS = document.getElementById('valueStream').value;
+
+        generatedRecords = [];
+        let snCounter = 1;
+        // Zaczynamy symulację od jakiegoś punktu w czasie
+        let baseTime = new Date('2026-05-25T06:00:00'); 
+        
+        // Pętla tworząca produkty. Każdy produkt to 6 rekordów (stacji)
+        while (generatedRecords.length < targetCount) {
+            const productSN = `SN-${String(snCounter).padStart(6, '0')}`;
+            // Symulacja równoległej pracy linii - start nowego produktu co ok. 20 sekund
+            let productTime = new Date(baseTime.getTime() + (snCounter * 20000));
+
+            for (let i = 0; i < STATIONS.length; i++) {
+                if (generatedRecords.length >= targetCount) break;
+
+                const station = STATIONS[i];
+                // Czas przebywania na stacji (20-60 sekund)
+                productTime = new Date(productTime.getTime() + randomInt(20000, 60000));
+                
+                // Realia produkcyjne: 92% yield na stację (zasada Pareto w awaryjności)
+                const isPass = Math.random() < 0.92; 
+                const status = isPass ? 'PASS' : 'FAIL';
+                const errorCode = isPass ? 'NONE' : station.errors[randomInt(0, station.errors.length - 1)];
+                const measuredValue = station.val(isPass);
+                
+                // Koszty tylko gdy FAIL (od 2.50 do 15.00)
+                const costImpact = isPass ? '0.00' : (Math.random() * 12.5 + 2.5).toFixed(2);
+                
+                // Dodajemy znak + do pomiarów pieca
+                let finalVal = measuredValue;
+                if(station.id === 'Reflow_Oven' && isPass && parseFloat(measuredValue) > 0) {
+                    finalVal = '+' + measuredValue;
+                }
+
+                generatedRecords.push({
+                    Timestamp: formatTime(productTime),
+                    Value_Stream: currentUsedVS, // Używamy wybranego VS
+                    Batch_ID: 'DC-2621',
+                    Product_SN: productSN,
+                    Station_ID: station.id,
+                    Tester_Type: 'In-line',
+                    Status: status,
+                    Error_Code: errorCode,
+                    Measured_Value: finalVal,
+                    Cost_Impact: costImpact,
+                    Shift: '06:00-14:00',
+                    Team: 'Brygada 1'
+                });
+            }
+            snCounter++;
+        }
+
+        renderTable();
+        document.getElementById('downloadBtn').disabled = false;
+        document.getElementById('statusText').innerHTML = `✅ Pomyślnie wygenerowano <b>${generatedRecords.length}</b> rekordów dla <b>${currentUsedVS}</b>.`;
+    }
+
+    function renderTable() {
+        const tbody = document.getElementById('tableBody');
+        tbody.innerHTML = '';
+        
+        // Renderujemy tylko max 100 pierwszych do podglądu, żeby nie zamulić przeglądarki (DOM jest drogi)
+        const displayLimit = Math.min(generatedRecords.length, 100);
+        
+        for (let i = 0; i < displayLimit; i++) {
+            const r = generatedRecords[i];
+            const statusClass = r.Status === 'PASS' ? 'pass' : 'fail';
+            
+            tbody.innerHTML += `
+                <tr>
+                    <td>${r.Timestamp}</td>
+                    <td><strong>${r.Value_Stream}</strong></td>
+                    <td>${r.Batch_ID}</td>
+                    <td>${r.Product_SN}</td>
+                    <td>${r.Station_ID}</td>
+                    <td>${r.Tester_Type}</td>
+                    <td class="${statusClass}">${r.Status}</td>
+                    <td>${r.Error_Code}</td>
+                    <td>${r.Measured_Value}</td>
+                    <td>${r.Cost_Impact}</td>
+                    <td>${r.Shift}</td>
+                    <td>${r.Team}</td>
+                </tr>
+            `;
+        }
+        
+        document.getElementById('dataTable').style.display = 'table';
+        if (generatedRecords.length > 100) {
+            tbody.innerHTML += `<tr><td colspan="12" class="text-center text-muted">... Pokazano 100 pierwszych rekordów ...</td></tr>`;
+        }
+    }
+
+    function downloadCSV() {
+        if (!generatedRecords.length) return;
+
+        // Przygotowanie zawartości CSV
+        const headers = Object.keys(generatedRecords[0]);
+        const csvRows = [headers.join(',')];
+
+        for (const row of generatedRecords) {
+            const values = headers.map(header => row[header]);
+            csvRows.push(values.join(','));
+        }
+
+        // Budowanie nazwy pliku
+        const today = new Date();
+        const dd = String(today.getDate()).padStart(2, '0');
+        const mm = String(today.getMonth() + 1).padStart(2, '0');
+        const yyyy = today.getFullYear();
+        const dateStr = `${dd}${mm}${yyyy}`; // Format DDMMRRRR
+
+        // Wyciąganie samego numeru z VS (np. 'VS1' -> '1')
+        const vsNumber = currentUsedVS.replace('VS', ''); 
+        
+        // Generujemy unikalny klucz do pamięci podręcznej (localStorage) aby śledzić rewizje
+        const trackerKey = `LOG_REV_${currentUsedVS}_${dateStr}`;
+        let currentRevision = parseInt(localStorage.getItem(trackerKey) || '0');
+        currentRevision++; // Podbijamy rewizję o 1
+        localStorage.setItem(trackerKey, currentRevision.toString()); // Zapisujemy nową w pamięci
+
+        // Formatowanie rewizji na 2 znaki (np. '01', '02')
+        const revStr = String(currentRevision).padStart(2, '0');
+        
+        // Ostateczna nazwa pliku zgodna z formatem (np. VS_1_31052026-01.csv)
+        const filename = `VS_${vsNumber}_${dateStr}-${revStr}.csv`;
+
+        // Pobieranie pliku
+        const blob = new Blob([csvRows.join('\n')], { type: 'text/csv' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.setAttribute('hidden', '');
+        a.setAttribute('href', url);
+        a.setAttribute('download', filename);
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+
+        // Aktualizacja statusu, aby pokazać jaką nazwę pobrano
+        document.getElementById('statusText').innerHTML = `📥 Pobrano plik: <b>${filename}</b>`;
+    }
+</script>
+
+</body>
+</html>
